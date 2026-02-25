@@ -2,16 +2,19 @@ services:
   db:
     image: postgres:16-alpine
     restart: always
-    env_file:
-      - ./backend/.env
     environment:
-      POSTGRES_DB: ${DB_NAME:-docsmind}
-      POSTGRES_USER: ${DB_USER:-docsmind_user}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-docsmind_pass}
+      POSTGRES_DB: docsmind
+      POSTGRES_USER: docsmind_user
+      POSTGRES_PASSWORD: docsmind_pass
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U docsmind_user -d docsmind" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   backend:
     build: ./backend
@@ -22,8 +25,10 @@ services:
       - "8000:8000"
     volumes:
       - ./backend:/app
+      - ./backend/media:/app/media
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     command: >
       sh -c "python manage.py migrate &&
              python manage.py runserver 0.0.0.0:8000"
