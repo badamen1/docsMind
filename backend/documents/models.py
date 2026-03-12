@@ -21,6 +21,16 @@ class Document(models.Model):
         DOCX = "docx", "Word (.docx)"
         TEXT = "text", "Texto plano"
 
+        @classmethod
+        def from_extension(cls, filename: str) -> str:
+            """Detecta el FileType a partir del nombre del archivo."""
+            import os
+            ext = os.path.splitext(filename)[1].lower()
+            file_type = Document.EXTENSION_MAP.get(ext)
+            if file_type is None:
+                raise ValueError(f"Tipo de archivo no soportado: {ext}")
+            return file_type
+
     class Status(models.TextChoices):
         PENDING = "pending", "Pendiente"
         PROCESSING = "processing", "Procesando"
