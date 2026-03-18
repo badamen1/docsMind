@@ -27,7 +27,7 @@ class Plan(models.Model):
             "description": "Acceso avanzado: hasta 100 documentos y 1 GB de almacenamiento.",
             "max_documents": 100,
             "max_storage_mb": 1024,
-        }
+        },
     }
 
     plan_type = models.CharField(
@@ -54,6 +54,10 @@ class Subscription(models.Model):
     """
     Suscripción activa de un usuario. Cada usuario tiene una única suscripción.
     Por defecto se asigna el plan Free.
+
+    Métodos clave:
+    - upgrade(plan): sube al plan indicado (futuro: webhook de Stripe).
+    - cancel(): cancela y hace downgrade a Free (principio DRY).
     """
 
     class Status(models.TextChoices):
@@ -83,13 +87,46 @@ class Subscription(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    # ------------------------------------------------------------------
+    #  Helpers
+    # ------------------------------------------------------------------
+
+    def _get_free_plan(self):
+        return Plan.objects.filter(plan_type=Plan.PlanType.FREE).first()
+
+    # ------------------------------------------------------------------
+    #  Métodos de negocio
+    # ------------------------------------------------------------------
+
     def save(self, *args, **kwargs):
         """Asigna el plan Free por defecto si no se especifica ningún plan."""
         if self.plan is None:
-            self.plan = Plan.objects.filter(
-                plan_type=Plan.PlanType.FREE
-            ).first()
+            self.plan = self._get_free_plan()
         super().save(*args, **kwargs)
+
+    def upgrade(self, plan: "Plan") -> None:
+        """
+        Sube al usuario al plan indicado y reactiva la suscripción.
+        Uso futuro: llamar desde el webhook de Stripe al confirmar el pago.
+        """
+        self.plan = plan
+        self.status = Subscription.Status.ACTIVE
+        self.expires_at = None
+        self.save(update_fields=["plan", "status", "expires_at", "updated_at"])
+
+    def cancel(self) -> None:
+        """
+        Cancela la suscripción y hace downgrade al plan Free.
+        Usa update() para evitar disparar post_save de nuevo (DRY).
+        """
+        free_plan = self._get_free_plan()
+        Subscription.objects.filter(pk=self.pk).update(
+            status=Subscription.Status.CANCELLED,
+            plan=free_plan,
+        )
+        # Sincronizar instancia local
+        self.status = Subscription.Status.CANCELLED
+        self.plan = free_plan
 
     def __str__(self):
         return f"{self.user} → {self.plan} [{self.status}]"
