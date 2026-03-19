@@ -12,6 +12,7 @@ from .models import Chat, Message
 from .serializers import (
     ChatDetailSerializer,
     ChatListSerializer,
+    CreateChatSerializer,
     SendMessageSerializer,
 )
 
@@ -33,6 +34,37 @@ class ChatListView(UserFilteredMixin, generics.ListAPIView):
 
     serializer_class = ChatListSerializer
     permission_classes = [IsAuthenticated]
+
+
+class CreateChatView(APIView):
+    """POST /api/chats/ — crear un chat nuevo para un documento."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = CreateChatSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        document_id = serializer.validated_data["document_id"]
+
+        try:
+            document = Document.objects.get(id=document_id, user=request.user)
+        except Document.DoesNotExist:
+            return Response(
+                {"detail": "Documento no encontrado."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Crear chat con título basado en el documento
+        chat = Chat.objects.create(
+            user=request.user,
+            document=document,
+            title=f"Chat - {document.file_name}",
+        )
+
+        return Response(
+            ChatDetailSerializer(chat).data,
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class ChatDetailView(UserFilteredMixin, generics.RetrieveDestroyAPIView):
