@@ -33,5 +33,20 @@ services:
       sh -c "python manage.py migrate &&
              python manage.py runserver 0.0.0.0:8000"
 
+  frontend:
+    build: ./frontend
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - NODE_ENV=development
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      - backend
+
 volumes:
   postgres_data:

@@ -40,12 +40,41 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
-    'corsheaders',  # added back 
+    'rest_framework_simplejwt',
+    'corsheaders',
     'users',
     'subscription',
     'documents',
     'chats',
 ]
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+}
+
+# CORS — permite que el frontend haga requests al backend
+CORS_ALLOWED_ORIGINS = config(
+    'CORS_ALLOWED_ORIGINS',
+    default='http://localhost:3000',
+    cast=Csv(),
+)
+CORS_ALLOW_CREDENTIALS = True
+
+# SimpleJWT
+from datetime import timedelta  # noqa: E402
+
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': False,
+}
+
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware', # added back

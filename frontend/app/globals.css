@@ -1,0 +1,11 @@
+@import "tailwindcss";
+
+@layer base {
+  html {
+    @apply scroll-smooth;
+  }
+
+  body {
+    @apply bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-50;
+  }
+}
