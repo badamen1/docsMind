@@ -7,6 +7,7 @@ dist/
 build/
 context.md
 actual.md
+commits.md
 # Virtual environment
 venv/
 env/
