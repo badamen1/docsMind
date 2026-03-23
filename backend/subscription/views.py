@@ -1,3 +1,3 @@
 from django.shortcuts import render
 
-# Create your views here.
+#Vistas para manejar suscripciones, como planes, pagos, etc. usando Stripe

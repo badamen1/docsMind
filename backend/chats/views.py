@@ -54,16 +54,23 @@ class CreateChatView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        # Crear chat con título basado en el documento
-        chat = Chat.objects.create(
-            user=request.user,
-            document=document,
-            title=f"Chat - {document.file_name}",
-        )
+        # Reutilizar chat existente o crear uno nuevo
+        chat = Chat.objects.filter(
+            user=request.user, document=document
+        ).order_by("-updated_at").first()
+
+        created = False
+        if not chat:
+            chat = Chat.objects.create(
+                user=request.user,
+                document=document,
+                title=f"Chat - {document.file_name}",
+            )
+            created = True
 
         return Response(
             ChatDetailSerializer(chat).data,
-            status=status.HTTP_201_CREATED,
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
         )
 
 
