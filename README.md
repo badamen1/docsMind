@@ -1,36 +1,35 @@
 # docsMind
 
-Este proyecto contiene el frontend (Next.js) y backend (Django) para la aplicación. Está configurado para ejecutarse fácilmente en entornos de desarrollo usando Docker Compose.
+Este proyecto contiene el frontend (Next.js) y backend (Django REST Framework) para la aplicación. Está configurado para ejecutarse usando Docker Compose. La arquitectura está dividida en un Cliente (SPA) y un Servidor (API REST conectada a PostgreSQL).
 
-## Requisitos Previos
+## Rutas Principales
+- **Ruta Principal (Frontend / Usuario Final):** [http://localhost:3000](http://localhost:3000)
+- **Ruta Administrador (Base de Datos):** [http://localhost:8000/admin](http://localhost:8000/admin)
 
-- [Docker](https://docs.docker.com/get-docker/) instalado.
-- [Docker Compose](https://docs.docker.com/compose/install/) instalado (usualmente incluido con Docker Desktop).
+---
 
-## Instrucciones para ejecutar el proyecto
+## 🚀 Instrucciones de Ejecución
 
-Sigue estos pasos para levantar tanto el frontend como el backend y la base de datos de forma local:
+Siguiendo las instrucciones del Entregable 1, el proyecto corre íntegramente de manera automatizada en un entorno Dockerizado.
 
-1. **Abre una terminal** en la carpeta principal del proyecto (donde se encuentra el archivo `docker-compose.yml`).
-
-2. **(Opcional) Configura las variables de entorno**:
-   Si es necesario, asegúrate de tener el archivo `.env` dentro de la carpeta `backend/`.
-
-3. **Construye y levanta los contenedores**:
-   Ejecuta el siguiente comando para construir las imágenes y levantar todos los servicios:
+1. **Abre una terminal** en la raíz del repositorio (donde está este `README.md`).
+2. **Levanta y Construye el Proyecto** ejecutando el siguiente comando:
    ```bash
-   docker-compose up --build
+   docker compose up -d --build
    ```
+3. El proyecto descargará PostgreSQL, configurará el motor de Python y la plataforma de Node.js. Cuando finalice, abre tu navegador.
 
-4. **Accede a la aplicación**:
-   Una vez que los contenedores estén corriendo, podrás acceder a:
-   - **Frontend**: [http://localhost:3000](http://localhost:3000)
-   - **Backend**: [http://localhost:8000](http://localhost:8000)
+### Probando el Login o el Servidor Administrador
+La plataforma cuenta con un sistema robusto de Gestión y Autenticación de Usuarios.
+Para acceder como administrador y ver los registros de la base de datos (Backend):
+- Ingresa a: `http://localhost:8000/admin`
+- Inicia sesión con la cuenta (o créala si la BD está limpia mediante shell).
 
-   *Nota: La base de datos PostgreSQL se levanta automáticamente en el puerto 5432 y no requiere configuración manual.*
+Para acceder a la plataforma como Cliente/Estudiante:
+- Ingresa a la interfaz principal `http://localhost:3000` y regístrate en el apartado "Iniciar Sesión -> Registrarse".
 
-5. **Para detener el proyecto**:
-   Presiona `Ctrl + C` en la terminal donde está corriendo, o ejecuta:
-   ```bash
-   docker-compose down
-   ```
+### Detener el proyecto
+Para bajar el servidor correctamente desde tu terminal:
+```bash
+docker compose down
+```
