@@ -42,3 +42,8 @@ class SendMessageSerializer(serializers.Serializer):
     """Serializer para validar el envío de un mensaje."""
 
     content = serializers.CharField(max_length=5000)
+    provider = serializers.ChoiceField(
+        choices=[("openai", "OpenAI"), ("gemini", "Gemini")],
+        default="gemini",
+        required=False,
+    )

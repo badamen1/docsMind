@@ -5,7 +5,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from ai_service.openai_service import OpenAIService
+from ai_service.factory import get_ai_service
 from documents.models import Document
 
 from .models import Chat, Message
@@ -17,9 +17,6 @@ from .serializers import (
 )
 
 logger = logging.getLogger(__name__)
-
-# Instancia del servicio de IA (DIP: depende de la abstracción)
-ai_service = OpenAIService()
 
 
 class UserFilteredMixin:
@@ -106,6 +103,8 @@ class SendMessageView(APIView):
         serializer = SendMessageSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user_content = serializer.validated_data["content"]
+        # Obtener proveedor del request (opcional)  
+        provider = serializer.validated_data.get("provider", "gemini")
 
         # Verificar que el documento está procesado
         document = chat.document
@@ -125,8 +124,9 @@ class SendMessageView(APIView):
             chat=chat, role=Message.Role.USER, content=user_content
         )
 
-        # Llamar al servicio de IA
+        # Llamar al servicio de IA con el proveedor seleccionado
         try:
+            ai_service = get_ai_service(provider)
             ai_response = ai_service.generate_response(
                 document_content=document.markdown_content,
                 conversation_history=history,
