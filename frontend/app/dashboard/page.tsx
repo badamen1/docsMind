@@ -78,7 +78,7 @@ export default function DashboardPage() {
         <div className="flex items-center gap-3">
           <div className="relative">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm">
-              🔍
+              
             </span>
             <input
               type="text"

@@ -55,6 +55,12 @@ export interface Subscription {
   is_active: boolean;
 }
 
+export interface AIProvider {
+  id: string;
+  name: string;
+  is_premium: boolean;
+}
+
 export interface AuthTokens {
   access: string;
   refresh: string;

@@ -7,8 +7,8 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { documentsAPI, chatsAPI } from "@/lib/api-endpoints";
-import { Document, ChatDetail, Message } from "@/lib/types";
+import { documentsAPI, chatsAPI, aiAPI } from "@/lib/api-endpoints";
+import { Document, ChatDetail, Message, AIProvider } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 
 export default function DocumentChatPage() {
@@ -22,6 +22,8 @@ export default function DocumentChatPage() {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [providers, setProviders] = useState<AIProvider[]>([]);
+  const [selectedProvider, setSelectedProvider] = useState("gemini");
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -53,6 +55,11 @@ export default function DocumentChatPage() {
     init();
   }, [documentId, router]);
 
+  // Cargar proveedores de IA disponibles
+  useEffect(() => {
+    aiAPI.getProviders().then(setProviders).catch(() => {});
+  }, []);
+
   // Scroll al último mensaje
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -74,7 +81,7 @@ export default function DocumentChatPage() {
     setSending(true);
 
     try {
-      const assistantMessage = await chatsAPI.sendMessage(chat.id, userMessage.content);
+      const assistantMessage = await chatsAPI.sendMessage(chat.id, userMessage.content, selectedProvider);
       setMessages((prev) => [...prev, assistantMessage]);
     } catch {
       setMessages((prev) => [
@@ -91,7 +98,7 @@ export default function DocumentChatPage() {
       setSending(false);
       inputRef.current?.focus();
     }
-  }, [input, chat, sending]);
+  }, [input, chat, sending, selectedProvider]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -279,28 +286,52 @@ export default function DocumentChatPage() {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Input */}
+        {/* Input + Toolbar */}
         <div className="border-t border-slate-800 p-3">
-          <div className="flex items-center gap-2 bg-slate-800 rounded-xl px-3 py-2">
-            <input
-              ref={inputRef}
-              type="text"
-              placeholder="Haz una pregunta sobre el documento..."
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              disabled={sending || document.status !== "completed"}
-              className="flex-1 bg-transparent text-sm text-white placeholder-slate-500
-                         focus:outline-none disabled:opacity-50"
-            />
-            <Button
-              size="sm"
-              onClick={handleSend}
-              disabled={!input.trim() || sending || document.status !== "completed"}
-              className="px-3 py-1.5 rounded-lg"
-            >
-              ➤
-            </Button>
+          <div className="bg-slate-800 rounded-xl overflow-hidden">
+            {/* Campo de texto */}
+            <div className="flex items-center gap-2 px-3 py-2.5">
+              <input
+                ref={inputRef}
+                type="text"
+                placeholder="Haz una pregunta sobre el documento..."
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                disabled={sending || document.status !== "completed"}
+                className="flex-1 bg-transparent text-sm text-white placeholder-slate-500
+                           focus:outline-none disabled:opacity-50"
+              />
+              <Button
+                size="sm"
+                onClick={handleSend}
+                disabled={!input.trim() || sending || document.status !== "completed"}
+                className="px-3 py-1.5 rounded-lg"
+              >
+                ➤
+              </Button>
+            </div>
+            {/* Toolbar inferior con selector de modelo */}
+            <div className="flex items-center gap-2 px-3 py-1.5 border-t border-slate-700/50">
+              <button
+                id="ai-provider-toggle"
+                onClick={() => {
+                  const next = providers.find((p) => p.id !== selectedProvider);
+                  if (next) setSelectedProvider(next.id);
+                }}
+                className="flex items-center gap-1.5 text-xs text-slate-400
+                           hover:text-slate-200 transition cursor-pointer rounded px-1.5 py-0.5
+                           hover:bg-slate-700/50"
+              >
+                <span className="text-[10px]">▲</span>
+                <span>
+                  {providers.find((p) => p.id === selectedProvider)?.name || "Gemini 2.5 Flash"}
+                </span>
+                {providers.find((p) => p.id === selectedProvider)?.is_premium && (
+                  <span className="text-[9px] text-amber-400">⭐</span>
+                )}
+              </button>
+            </div>
           </div>
           <p className="text-[10px] text-slate-600 text-center mt-1.5">
             La IA puede cometer errores. Verifica la información importante.

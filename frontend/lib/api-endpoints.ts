@@ -17,6 +17,7 @@ import type {
   Message,
   Subscription,
   AuthResponse,
+  AIProvider,
 } from "./types";
 
 /**
@@ -66,8 +67,8 @@ export const chatsAPI = {
   create: (documentId: string) =>
     apiPost<ChatDetail>("/api/chats/create/", { document_id: documentId }),
 
-  sendMessage: (chatId: string, content: string) =>
-    apiPost<Message>(`/api/chats/${chatId}/messages/`, { content }),
+  sendMessage: (chatId: string, content: string, provider: string = "gemini") =>
+    apiPost<Message>(`/api/chats/${chatId}/messages/`, { content, provider }),
 
   delete: (id: string) => apiDelete(`/api/chats/${id}/`),
 };
@@ -77,4 +78,11 @@ export const chatsAPI = {
  */
 export const subscriptionAPI = {
   get: () => apiGet<Subscription>("/api/subscription/"),
+};
+
+/**
+ * AI PROVIDERS ENDPOINTS
+ */
+export const aiAPI = {
+  getProviders: () => apiGet<AIProvider[]>("/api/ai/providers/"),
 };
