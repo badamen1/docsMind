@@ -16,6 +16,7 @@ import type {
   ChatDetail,
   Message,
   Subscription,
+  SubscriptionDetailResponse,
   AuthResponse,
   AIProvider,
 } from "./types";
@@ -77,7 +78,23 @@ export const chatsAPI = {
  * SUBSCRIPTION ENDPOINTS
  */
 export const subscriptionAPI = {
-  get: () => apiGet<Subscription>("/api/subscription/"),
+  setupIntent: () =>
+    apiPost<{ client_secret: string }>("/api/subscription/setup-intent/"),
+
+  detail: () =>
+    apiGet<SubscriptionDetailResponse>("/api/subscription/detail/"),
+
+  subscribe: (product_id: string, payment_method_id: string) =>
+    apiPost<{ subscription_id: string; status: string; product: object }>(
+      "/api/subscription/subscribe/",
+      { product_id, payment_method_id }
+    ),
+
+  cancel: (immediate = false) =>
+    apiPost<{ status: string; message: string }>(
+      "/api/subscription/cancel/",
+      { immediate }
+    ),
 };
 
 /**

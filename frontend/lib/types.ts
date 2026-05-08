@@ -77,3 +77,23 @@ export interface ErrorResponse {
   error?: string;
   [key: string]: any;
 }
+
+export interface SubscriptionState {
+  plan_type: "free" | "pro";
+}
+
+export interface SubscriptionDetailResponse {
+  status: "inactive" | "success";
+  plan_type: "free" | "pro";
+  plan?: string;
+  message?: string;
+  subscription?: {
+    id: string;
+    status: string;
+    current_period_start: number;
+    current_period_end: number;
+    cancel_at: number | null;
+    cancel_at_period_end: boolean;
+    price_id: string;
+  };
+}

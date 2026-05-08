@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/contexts/AuthContext";
 import { subscriptionAPI } from "@/lib/api-endpoints";
-import { Subscription } from "@/lib/types";
+import { SubscriptionDetailResponse } from "@/lib/types";
 import { useEffect, useState } from "react";
 
 const NAV_ITEMS = [
@@ -26,16 +26,14 @@ const NAV_ITEMS = [
 export function Sidebar() {
   const pathname = usePathname();
   const { user, logout } = useAuth();
-  const [subscription, setSubscription] = useState<Subscription | null>(null);
+  const [subscription, setSubscription] = useState<SubscriptionDetailResponse | null>(null);
   const [showUserMenu, setShowUserMenu] = useState(false);
 
   useEffect(() => {
-    subscriptionAPI.get().then(setSubscription).catch(() => {});
+    subscriptionAPI.detail().then(setSubscription).catch(() => {});
   }, []);
 
-  const storagePercent = subscription
-    ? Math.min(100, Math.round((0 / (subscription.max_storage_mb || 10)) * 100))
-    : 0;
+  const storagePercent = 0; // TODO: Implement storage tracking based on subscription details
 
   return (
     <aside className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col h-full">
@@ -84,7 +82,7 @@ export function Sidebar() {
       </nav>
 
       {/* Storage & Plan */}
-      {subscription && (
+      {subscription && subscription.status === "success" && (
         <div className="m-3 p-3 bg-slate-800/50 rounded-lg border border-slate-700">
           <div className="flex justify-between text-sm mb-1">
             <span className="text-slate-400">Almacenamiento</span>
@@ -97,7 +95,7 @@ export function Sidebar() {
             />
           </div>
           <p className="text-xs text-slate-500 mb-3">
-            {subscription.max_documents || 5} documentos máx.
+            Plan actual: {subscription.plan_type === "pro" ? "Pro" : "Free"}
           </p>
           <div className="text-xs text-slate-500 mb-1">PLANES DISPONIBLES</div>
           <div className="flex justify-between text-sm">
@@ -127,7 +125,7 @@ export function Sidebar() {
               {user?.username || "Usuario"}
             </p>
             <p className="text-xs text-slate-500">
-              Plan {subscription?.plan || "Free"}
+              Plan {subscription?.plan_type === "pro" ? "Pro" : "Free"}
             </p>
           </div>
           <span className="text-slate-500 text-xs">▼</span>
