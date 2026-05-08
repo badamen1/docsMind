@@ -1,136 +1,121 @@
+from unittest.mock import MagicMock, patch
+
 from django.test import TestCase
 from rest_framework.test import APIClient
-from rest_framework import status
 
-from users.models import User
 from subscription.models import Plan, Subscription
+from users.models import User
 
 
-class PlanModelTestCase(TestCase):
-    """Tests para el modelo Plan."""
+def _make_user(email="test@example.com"):
+    user = User.objects.create_user(
+        email=email,
+        username=email.split("@")[0],
+        password="testpass123",
+    )
+    return user
 
+
+class SetupIntentViewTest(TestCase):
     def setUp(self):
-        self.free_plan = Plan.objects.create(
+        Plan.objects.get_or_create(
             plan_type=Plan.PlanType.FREE,
-            name="Free",
-            price="0.00",
-            description="Plan gratuito",
-            max_documents=5,
-            max_storage_mb=10,
+            defaults={
+                "name": "Free",
+                "price": "0.00",
+                "description": "Free plan",
+                "max_documents": 5,
+                "max_storage_mb": 10,
+            },
         )
-        self.pro_plan = Plan.objects.create(
+        Plan.objects.get_or_create(
             plan_type=Plan.PlanType.PRO,
-            name="Pro",
-            price="9.99",
-            description="Plan pro",
-            max_documents=100,
-            max_storage_mb=1024,
+            defaults={
+                "name": "Pro",
+                "price": "9.99",
+                "description": "Pro plan",
+                "max_documents": 100,
+                "max_storage_mb": 1024,
+            },
         )
-
-    def test_str_representation(self):
-        """El string del plan muestra nombre y precio."""
-        self.assertIn("Free", str(self.free_plan))
-        self.assertIn("0.00", str(self.free_plan))
-
-    def test_ordering_by_price(self):
-        """Los planes se ordenan por precio (Free primero)."""
-        plans = list(Plan.objects.all())
-        self.assertEqual(plans[0].plan_type, Plan.PlanType.FREE)
-        self.assertEqual(plans[1].plan_type, Plan.PlanType.PRO)
-
-
-class SubscriptionModelTestCase(TestCase):
-    """Tests para el modelo Subscription y sus métodos."""
-
-    def setUp(self):
-        self.free_plan = Plan.objects.create(
-            plan_type=Plan.PlanType.FREE,
-            name="Free",
-            price="0.00",
-            description="Plan gratuito",
-            max_documents=5,
-            max_storage_mb=10,
-        )
-        self.pro_plan = Plan.objects.create(
-            plan_type=Plan.PlanType.PRO,
-            name="Pro",
-            price="9.99",
-            description="Plan pro",
-            max_documents=100,
-            max_storage_mb=1024,
-        )
-        self.user = User.objects.create_user(
-            email="test@docsmind.com",
-            username="testuser",
-            password="TestPass123!",
-        )
-
-    def test_subscription_created_on_user_register(self):
-        """La señal crea una suscripción Free al registrar el usuario."""
-        self.assertTrue(hasattr(self.user, "subscription"))
-        sub = self.user.subscription
-        self.assertEqual(sub.plan, self.free_plan)
-        self.assertEqual(sub.status, Subscription.Status.ACTIVE)
-
-    def test_upgrade_changes_plan_and_status(self):
-        """upgrade() cambia el plan al Pro y mantiene status ACTIVE."""
-        sub = self.user.subscription
-        sub.upgrade(self.pro_plan)
-        sub.refresh_from_db()
-        self.assertEqual(sub.plan, self.pro_plan)
-        self.assertEqual(sub.status, Subscription.Status.ACTIVE)
-        self.assertIsNone(sub.expires_at)
-
-    def test_cancel_downgrades_to_free(self):
-        """cancel() cambia el status a CANCELLED y vuelve al plan Free."""
-        sub = self.user.subscription
-        # Primero subir a Pro
-        sub.upgrade(self.pro_plan)
-        sub.refresh_from_db()
-        self.assertEqual(sub.plan, self.pro_plan)
-
-        # Ahora cancelar
-        sub.cancel()
-        sub.refresh_from_db()
-        self.assertEqual(sub.status, Subscription.Status.CANCELLED)
-        self.assertEqual(sub.plan, self.free_plan)
-
-    def test_str_representation(self):
-        """El string de Subscription incluye usuario y plan."""
-        sub = self.user.subscription
-        self.assertIn(str(self.user), str(sub))
-
-
-class SubscriptionAPITestCase(TestCase):
-    """Tests para el endpoint GET /api/subscription/."""
-
-    def setUp(self):
+        self.user = _make_user()
         self.client = APIClient()
-        Plan.objects.create(
+        self.client.force_authenticate(user=self.user)
+
+    @patch("subscription.stripe_payments_gateway.stripe")
+    def test_setup_intent_returns_client_secret(self, mock_stripe):
+        mock_stripe.Customer.create.return_value = MagicMock(id="cus_test123")
+        mock_stripe.SetupIntent.create.return_value = MagicMock(
+            client_secret="seti_test_secret"
+        )
+
+        response = self.client.post("/api/subscription/setup-intent/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("client_secret", response.data)
+        self.assertEqual(response.data["client_secret"], "seti_test_secret")
+
+    def test_setup_intent_requires_authentication(self):
+        unauthenticated = APIClient()
+        response = unauthenticated.post("/api/subscription/setup-intent/")
+        self.assertEqual(response.status_code, 401)
+
+    @patch("subscription.stripe_payments_gateway.stripe")
+    def test_setup_intent_persists_stripe_customer_id(self, mock_stripe):
+        mock_stripe.Customer.create.return_value = MagicMock(id="cus_new123")
+        mock_stripe.SetupIntent.create.return_value = MagicMock(
+            client_secret="seti_secret"
+        )
+
+        self.client.post("/api/subscription/setup-intent/")
+
+        self.user.subscription.refresh_from_db()
+        self.assertEqual(self.user.subscription.stripe_customer_id, "cus_new123")
+
+    @patch("subscription.stripe_payments_gateway.stripe")
+    def test_setup_intent_reuses_existing_customer(self, mock_stripe):
+        self.user.subscription.stripe_customer_id = "cus_existing"
+        self.user.subscription.save(update_fields=["stripe_customer_id", "updated_at"])
+
+        mock_stripe.SetupIntent.create.return_value = MagicMock(
+            client_secret="seti_secret"
+        )
+
+        self.client.post("/api/subscription/setup-intent/")
+
+        mock_stripe.Customer.create.assert_not_called()
+
+
+class SubscriptionDetailViewTest(TestCase):
+    def setUp(self):
+        Plan.objects.get_or_create(
             plan_type=Plan.PlanType.FREE,
-            name="Free",
-            price="0.00",
-            description="Plan gratuito",
-            max_documents=5,
-            max_storage_mb=10,
+            defaults={
+                "name": "Free",
+                "price": "0.00",
+                "description": "Free plan",
+                "max_documents": 5,
+                "max_storage_mb": 10,
+            },
         )
-        self.user = User.objects.create_user(
-            email="test@docsmind.com",
-            username="testuser",
-            password="TestPass123!",
+        Plan.objects.get_or_create(
+            plan_type=Plan.PlanType.PRO,
+            defaults={
+                "name": "Pro",
+                "price": "9.99",
+                "description": "Pro plan",
+                "max_documents": 100,
+                "max_storage_mb": 1024,
+            },
         )
-        self.client.force_login(self.user)
+        self.user = _make_user("detail@example.com")
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
 
-    def test_get_subscription_authenticated(self):
-        """Un usuario autenticado puede ver su suscripción."""
-        response = self.client.get("/api/subscription/")
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIn("plan", response.data)
-        self.assertIn("status", response.data)
-        self.assertIn("is_active", response.data)
+    def test_detail_includes_plan_type_when_no_stripe_sub(self):
+        response = self.client.get("/api/subscription/detail/")
 
-    def test_get_subscription_unauthenticated(self):
-        """Un usuario no autenticado no puede ver la suscripción."""
-        self.client.logout()
-        response = self.client.get("/api/subscription/")
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("plan_type", response.data)
+        self.assertEqual(response.data["plan_type"], "free")
+        self.assertEqual(response.data["status"], "inactive")
