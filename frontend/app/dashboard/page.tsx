@@ -6,12 +6,14 @@ import { documentsAPI } from "@/lib/api-endpoints";
 import { Document } from "@/lib/types";
 import { UploadZone } from "@/components/dashboard/UploadZone";
 import { DocumentCard } from "@/components/dashboard/DocumentCard";
+import { useAuth } from "@/lib/hooks/useAuth";
 
 type StatusFilter = "all" | "completed" | "processing" | "pending" | "failed";
 type ViewMode = "grid" | "list";
 
 export default function DashboardPage() {
   const router = useRouter();
+  const { subscription } = useAuth();
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -76,10 +78,31 @@ export default function DashboardPage() {
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-white">Biblioteca</h1>
         <div className="flex items-center gap-3">
+          {/* Badge de plan */}
+          <span
+            className={`px-3 py-1 rounded-full text-xs font-semibold ${
+              subscription?.plan_type === 'pro'
+                ? 'bg-blue-600 text-white'
+                : 'bg-slate-700 text-slate-300'
+            }`}
+          >
+            {subscription?.plan_type === 'pro' ? '⭐ Pro' : 'Free'}
+          </span>
+
+          {/* Botón Ir a Pro — solo para usuarios Free */}
+          {subscription?.plan_type !== 'pro' && (
+            <button
+              onClick={() => router.push('/subscribe')}
+              className="px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700
+                         text-white text-sm font-medium rounded-lg transition shadow-lg
+                         flex items-center gap-2"
+            >
+              Ir a Pro
+            </button>
+          )}
+
           <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm">
-              
-            </span>
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm" />
             <input
               type="text"
               placeholder="Buscar documentos..."
