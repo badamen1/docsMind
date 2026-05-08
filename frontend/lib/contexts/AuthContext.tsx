@@ -8,20 +8,22 @@
 
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useState,
   ReactNode,
 } from "react";
 import { useRouter } from "next/navigation";
-import { authAPI } from "@/lib/api-endpoints";
-import { User } from "@/lib/types";
+import { authAPI, subscriptionAPI } from "@/lib/api-endpoints";
+import { User, SubscriptionState } from "@/lib/types";
 import { ApiError, clearTokens, setTokens, getAccessToken } from "@/lib/api";
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
   error: string | null;
+  subscription: SubscriptionState | null;
   register: (
     email: string,
     username: string,
@@ -31,6 +33,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   clearError: () => void;
+  refreshSubscription: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -40,6 +43,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [subscription, setSubscription] = useState<SubscriptionState | null>(null);
+
+  const refreshSubscription = useCallback(async () => {
+    try {
+      const data = await subscriptionAPI.detail();
+      setSubscription({ plan_type: data.plan_type });
+    } catch {
+      // Si falla, no interrumpir la sesión
+    }
+  }, []);
 
   // Verificar sesión al montar
   useEffect(() => {
@@ -53,6 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const currentUser = await authAPI.getMe();
         setUser(currentUser);
+        await refreshSubscription();
       } catch {
         clearTokens();
         setUser(null);
@@ -62,7 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     checkAuth();
-  }, []);
+  }, [refreshSubscription]);
 
   const register = async (
     email: string,
@@ -101,6 +115,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const response = await authAPI.login(email, password);
       setTokens({ access: response.access, refresh: response.refresh });
       setUser(response.user);
+      await refreshSubscription();
       router.push("/dashboard");
     } catch (err) {
       const message =
@@ -123,6 +138,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       clearTokens();
       setUser(null);
+      setSubscription(null);
       router.push("/auth/login");
     }
   };
@@ -131,7 +147,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, loading, error, register, login, logout, clearError }}
+      value={{
+        user,
+        loading,
+        error,
+        subscription,
+        register,
+        login,
+        logout,
+        clearError,
+        refreshSubscription,
+      }}
     >
       {children}
     </AuthContext.Provider>
