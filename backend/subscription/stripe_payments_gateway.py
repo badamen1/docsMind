@@ -1,16 +1,8 @@
-import os
 from decouple import config
 import stripe
-from django.http import JsonResponse
 from users.models import User
 
-# Manejo seguro de excepciones de Stripe
-try:
-    from stripe.error import StripeError
-except ImportError:
-    # Fallback para versiones recientes where StripeError no es exportado
-    class StripeError(Exception):
-        pass
+StripeError = stripe.StripeError
 
 STRIPE_API_KEY = config("STRIPE_API_KEY")
 stripe.api_key = STRIPE_API_KEY
@@ -25,14 +17,6 @@ def validate_user(user):
     """Valida que el usuario sea válido."""
     if not user or not user.email:
         raise ValueError("Usuario inválido o sin email")
-    return True
-
-
-def validate_card_data(card_data):
-    """Valida datos de tarjeta."""
-    required_fields = ["number", "exp_month", "exp_year", "cvc"]
-    if not all(field in card_data for field in required_fields):
-        raise ValueError(f"Faltan campos en tarjeta. Requeridos: {required_fields}")
     return True
 
 
@@ -71,37 +55,6 @@ def create_or_get_stripe_customer(user: User, force_new=False) -> str:
 # ============================================================================
 # FUNCIONES DE STRIPE - PAYMENT METHODS
 # ============================================================================
-
-def create_stripe_payment_method(card_data: dict) -> str:
-    """
-    Crea un método de pago (tarjeta) en Stripe.
-    
-    Args:
-        card_data: Dict con keys: number, exp_month, exp_year, cvc
-    
-    Returns:
-        ID del payment method (ej: "pm_...")
-    
-    Raises:
-        ValueError: Si faltan campos en tarjeta
-        StripeError: Si hay error con Stripe API
-    """
-    validate_card_data(card_data)
-    
-    try:
-        payment_method = stripe.PaymentMethod.create(
-            type="card",
-            card={
-                "number": card_data["number"],
-                "exp_month": int(card_data["exp_month"]),
-                "exp_year": int(card_data["exp_year"]),
-                "cvc": card_data["cvc"],
-            },
-        )
-        return payment_method.id
-    except StripeError as e:
-        raise Exception(f"Error creando payment method: {str(e)}")
-
 
 def attach_payment_method_to_customer(payment_method_id: str, customer_id: str) -> None:
     """
