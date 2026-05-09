@@ -18,6 +18,44 @@ logger = logging.getLogger(__name__)
 class DocumentService:
 
     @staticmethod
+    def check_upload_limits(user, incoming_file_size_bytes: int) -> None:
+        """
+        Raises PermissionError if the user would exceed their plan limits.
+        Call BEFORE creating the Document record.
+        """
+        try:
+            plan = user.subscription.plan
+        except Exception:
+            return  # no subscription → no limits
+
+        if plan is None:
+            return
+
+        existing = Document.objects.filter(user=user)
+
+        if plan.max_documents is not None:
+            count = existing.count()
+            if count >= plan.max_documents:
+                raise PermissionError(
+                    f"Has alcanzado el límite de {plan.max_documents} documentos "
+                    f"de tu plan {plan.name}."
+                )
+
+        if plan.max_storage_mb is not None:
+            used_bytes = existing.aggregate(total=Sum("file_size"))["total"] or 0
+            limit_bytes = plan.max_storage_mb * 1024 * 1024
+            if used_bytes + incoming_file_size_bytes > limit_bytes:
+                raise PermissionError(
+                    f"Has alcanzado el límite de almacenamiento de "
+                    f"{plan.max_storage_mb} MB de tu plan {plan.name}."
+                )
+
+    @staticmethod
+    def process_document(document, ocr_service=None) -> None:
+        """Placeholder — fully implemented in Task 4."""
+        pass
+
+    @staticmethod
     def validate_plan_limits(user, file_size: int) -> None:
         """
         Valida que el usuario no supere los límites de documentos y

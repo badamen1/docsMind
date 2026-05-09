@@ -10,6 +10,7 @@ from rest_framework.parsers import MultiPartParser
 from rest_framework.response import Response
 
 from .models import Document
+from .services import DocumentService
 
 logger = logging.getLogger(__name__)
 
@@ -138,6 +139,11 @@ def upload_document(request):
         file_type = Document.detect_file_type(file.name)
     except ValueError as exc:
         return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        DocumentService.check_upload_limits(request.user, file.size)
+    except PermissionError as exc:
+        return Response({"error": str(exc)}, status=status.HTTP_403_FORBIDDEN)
 
     document = Document.objects.create(
         user=request.user,

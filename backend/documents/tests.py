@@ -1,10 +1,15 @@
+from unittest.mock import patch
+
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db.models import Sum
 from django.test import TestCase
 from rest_framework.test import APIClient
 from rest_framework import status
 
 from users.models import User
 from documents.models import Document
+from subscription.models import Plan
+from documents.services import DocumentService
 
 
 class DocumentUploadTestCase(TestCase):
@@ -75,3 +80,86 @@ class DocumentListTestCase(TestCase):
         response = self.client.get("/api/documents/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 0)
+
+
+class UploadLimitsTestCase(TestCase):
+    """Tests para verificar la aplicación de límites del plan en uploads."""
+
+    def setUp(self):
+        self.free_plan, _ = Plan.objects.get_or_create(
+            plan_type=Plan.PlanType.FREE,
+            defaults={
+                "name": "Free", "price": "0.00",
+                "description": "Plan gratuito", "max_documents": 5, "max_storage_mb": 10,
+            },
+        )
+        self.pro_plan, _ = Plan.objects.get_or_create(
+            plan_type=Plan.PlanType.PRO,
+            defaults={
+                "name": "Pro", "price": "9.99",
+                "description": "Plan pro", "max_documents": 100, "max_storage_mb": 1024,
+            },
+        )
+        self.client = APIClient()
+        # Create user AFTER plans so signal finds free_plan and creates subscription
+        self.user = User.objects.create_user(
+            email="free@test.com", username="freeuser", password="pass"
+        )
+        self.client.force_authenticate(user=self.user)
+
+    @patch("documents.views.process_document")
+    def test_free_user_blocked_at_document_limit(self, mock_process):
+        for i in range(5):
+            Document.objects.create(
+                user=self.user, file_name=f"doc{i}.txt",
+                file_type=Document.FileType.TEXT, file_size=100,
+            )
+        file = SimpleUploadedFile("extra.txt", b"content", content_type="text/plain")
+        response = self.client.post("/api/documents/upload/", {"file": file}, format="multipart")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertIn("límite", response.data["error"])
+
+    @patch("documents.views.process_document")
+    def test_free_user_blocked_at_storage_limit(self, mock_process):
+        nine_dot_nine_mb = 9 * 1024 * 1024 + 900 * 1024
+        Document.objects.create(
+            user=self.user, file_name="large.txt",
+            file_type=Document.FileType.TEXT, file_size=nine_dot_nine_mb,
+        )
+        big_content = b"x" * (200 * 1024)
+        file = SimpleUploadedFile("overflow.txt", big_content, content_type="text/plain")
+        response = self.client.post("/api/documents/upload/", {"file": file}, format="multipart")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertIn("almacenamiento", response.data["error"])
+
+    @patch("documents.views.process_document")
+    def test_pro_user_can_upload_beyond_free_limit(self, mock_process):
+        self.user.subscription.plan = self.pro_plan
+        self.user.subscription.save(update_fields=["plan", "updated_at"])
+        for i in range(6):
+            Document.objects.create(
+                user=self.user, file_name=f"doc{i}.txt",
+                file_type=Document.FileType.TEXT, file_size=100,
+            )
+        file = SimpleUploadedFile("seventh.txt", b"content", content_type="text/plain")
+        response = self.client.post("/api/documents/upload/", {"file": file}, format="multipart")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_check_upload_limits_raises_on_doc_count(self):
+        for i in range(5):
+            Document.objects.create(
+                user=self.user, file_name=f"doc{i}.txt",
+                file_type=Document.FileType.TEXT, file_size=100,
+            )
+        with self.assertRaises(PermissionError) as ctx:
+            DocumentService.check_upload_limits(self.user, 100)
+        self.assertIn("5", str(ctx.exception))
+
+    def test_check_upload_limits_raises_on_storage(self):
+        Document.objects.create(
+            user=self.user, file_name="big.txt",
+            file_type=Document.FileType.TEXT, file_size=10 * 1024 * 1024,
+        )
+        with self.assertRaises(PermissionError) as ctx:
+            DocumentService.check_upload_limits(self.user, 1)
+        self.assertIn("almacenamiento", str(ctx.exception))
