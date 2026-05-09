@@ -18,6 +18,8 @@ from .serializers import (
 
 logger = logging.getLogger(__name__)
 
+_PRO_ONLY_MODELS = {"gemini-2.5-pro"}
+
 
 class UserFilteredMixin:
     """Filtra el queryset para mostrar solo los objetos del usuario autenticado."""
@@ -108,7 +110,6 @@ class SendMessageView(APIView):
         gemini_model = serializer.validated_data.get("gemini_model")
 
         # Gate: only Pro users can select Pro-exclusive models
-        _PRO_ONLY_MODELS = {"gemini-2.5-pro"}
         if gemini_model and gemini_model in _PRO_ONLY_MODELS:
             plan = getattr(getattr(request.user, "subscription", None), "plan", None)
             is_pro = plan is not None and plan.plan_type == "pro"

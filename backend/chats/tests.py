@@ -171,9 +171,13 @@ class ChatAPITestCase(TestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
-    @patch("chats.views.ai_service.generate_response", return_value="Respuesta de la IA")
-    def test_send_message_success(self, mock_ai):
+    @patch("chats.views.get_ai_service")
+    def test_send_message_success(self, mock_get_ai):
         """Enviar un mensaje devuelve la respuesta de la IA."""
+        mock_service = MagicMock()
+        mock_service.generate_response.return_value = "Respuesta de la IA"
+        mock_get_ai.return_value = mock_service
+
         response = self.client.post(
             f"/api/chats/{self.chat.id}/messages/",
             {"content": "¿De qué trata el documento?"},
@@ -182,7 +186,6 @@ class ChatAPITestCase(TestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data["content"], "Respuesta de la IA")
         self.assertEqual(response.data["role"], Message.Role.ASSISTANT)
-        # Verificar que se guardaron ambos mensajes (user + assistant)
         self.assertEqual(self.chat.messages.count(), 2)
 
 
