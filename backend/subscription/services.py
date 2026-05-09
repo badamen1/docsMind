@@ -192,16 +192,22 @@ class SubscriptionService:
             }
 
         stripe_sub = stripe.Subscription.retrieve(subscription.stripe_subscription_id)
+        # StripeObject hereda de dict: usar acceso por clave, no por atributo,
+        # para evitar que .items() devuelva el método built-in de dict.
+        items_list = stripe_sub.get("items", {}).get("data", [])
+        item = items_list[0] if items_list else {}
+        current_period_start = item.get("current_period_start") or stripe_sub.get("current_period_start")
+        current_period_end = item.get("current_period_end") or stripe_sub.get("current_period_end")
         return {
             "status": "success",
             "plan_type": plan_type,
             "subscription": {
-                "id": stripe_sub.id,
-                "status": stripe_sub.status,
-                "current_period_start": stripe_sub.current_period_start,
-                "current_period_end": stripe_sub.current_period_end,
-                "cancel_at": stripe_sub.cancel_at,
-                "cancel_at_period_end": stripe_sub.cancel_at_period_end,
+                "id": stripe_sub.get("id"),
+                "status": stripe_sub.get("status"),
+                "current_period_start": current_period_start,
+                "current_period_end": current_period_end,
+                "cancel_at": stripe_sub.get("cancel_at"),
+                "cancel_at_period_end": stripe_sub.get("cancel_at_period_end", False),
                 "price_id": subscription.stripe_price_id,
             },
         }
