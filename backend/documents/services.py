@@ -5,7 +5,7 @@ Las vistas solo delegan aquí — ninguna lógica de dominio vive en views.py.
 
 import logging
 
-from django.core.exceptions import ValidationError
+from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction
 from django.db.models import Sum
 
@@ -25,7 +25,7 @@ class DocumentService:
         """
         try:
             plan = user.subscription.plan
-        except Exception:
+        except ObjectDoesNotExist:
             return  # no subscription → no limits
 
         if plan is None:
@@ -54,42 +54,6 @@ class DocumentService:
     def process_document(document, ocr_service=None) -> None:
         """Placeholder — fully implemented in Task 4."""
         pass
-
-    @staticmethod
-    def validate_plan_limits(user, file_size: int) -> None:
-        """
-        Valida que el usuario no supere los límites de documentos y
-        almacenamiento definidos en su plan de suscripción.
-
-        Raises:
-            ValidationError: Si se supera algún límite del plan o el usuario
-                             no tiene suscripción/plan asignado.
-        """
-        # Guardia: verificar que el usuario tiene suscripción con plan asignado
-        subscription = getattr(user, "subscription", None)
-        plan = getattr(subscription, "plan", None) if subscription else None
-
-        if plan is None:
-            raise ValidationError(
-                "Tu cuenta no tiene un plan activo. Contacta al soporte."
-            )
-
-        # Validar cantidad de documentos
-        doc_count = Document.objects.filter(user=user).count()
-        if plan.max_documents is not None and doc_count >= plan.max_documents:
-            raise ValidationError(
-                f"Has alcanzado el límite de {plan.max_documents} documentos de tu plan."
-            )
-
-        # Validar almacenamiento total
-        total_bytes = (
-            Document.objects.filter(user=user).aggregate(total=Sum("file_size"))["total"] or 0
-        )
-        max_bytes = (plan.max_storage_mb or 0) * 1024 * 1024
-        if total_bytes + file_size > max_bytes:
-            raise ValidationError(
-                f"Has excedido el límite de almacenamiento de {plan.max_storage_mb} MB de tu plan."
-            )
 
     @staticmethod
     @transaction.atomic

@@ -5,8 +5,9 @@ import pytesseract
 from docx import Document as DocxDocument
 from PIL import Image
 from rest_framework import status
-from rest_framework.decorators import api_view, parser_classes
+from rest_framework.decorators import api_view, parser_classes, permission_classes
 from rest_framework.parsers import MultiPartParser
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from .models import Document
@@ -126,6 +127,7 @@ def process_document(document: Document) -> None:
 
 @api_view(["POST"])
 @parser_classes([MultiPartParser])
+@permission_classes([IsAuthenticated])
 def upload_document(request):
     """Sube un documento, detecta su tipo y lo procesa a Markdown."""
     file = request.FILES.get("file")
