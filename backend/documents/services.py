@@ -4,6 +4,12 @@ Las vistas solo delegan aquí — ninguna lógica de dominio vive en views.py.
 """
 
 import logging
+import os
+import tempfile
+
+import fitz  # PyMuPDF
+from docx import Document as DocxDocument
+from PIL import Image
 
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction
@@ -11,6 +17,7 @@ from django.db.models import Sum
 
 from .models import Document
 from .processors import PROCESSORS
+from .ocr import OCRService
 
 logger = logging.getLogger(__name__)
 
@@ -51,9 +58,90 @@ class DocumentService:
                 )
 
     @staticmethod
-    def process_document(document, ocr_service=None) -> None:
-        """Placeholder — fully implemented in Task 4."""
-        pass
+    def process_document(document: Document, ocr_service: "OCRService") -> None:
+        """
+        Processes a Document: extracts content and saves Markdown.
+        The ocr_service determines whether Tesseract or Landing AI is used.
+        """
+        document.status = Document.Status.PROCESSING
+        document.save(update_fields=["status", "updated_at"])
+
+        try:
+            file_path = document.file.path
+
+            if document.file_type == Document.FileType.PDF:
+                markdown = DocumentService._process_pdf(file_path, ocr_service)
+            elif document.file_type == Document.FileType.IMAGE:
+                markdown = DocumentService._process_image(file_path, ocr_service)
+            elif document.file_type == Document.FileType.DOCX:
+                markdown = DocumentService._process_docx(file_path)
+            elif document.file_type == Document.FileType.TEXT:
+                markdown = DocumentService._process_text(file_path)
+            else:
+                raise ValueError(f"No hay procesador para el tipo: {document.file_type}")
+
+            document.markdown_content = markdown.strip()
+            document.status = Document.Status.COMPLETED
+            document.error_message = ""
+            document.save(
+                update_fields=["markdown_content", "status", "error_message", "updated_at"]
+            )
+            logger.info("Documento %s procesado exitosamente.", document.id)
+
+        except Exception as exc:
+            document.status = Document.Status.FAILED
+            document.error_message = str(exc)
+            document.save(update_fields=["status", "error_message", "updated_at"])
+            logger.error("Error procesando documento %s: %s", document.id, exc)
+
+    @staticmethod
+    def _process_pdf(file_path: str, ocr_service: "OCRService") -> str:
+        doc = fitz.open(file_path)
+        pages_md: list[str] = []
+        for page_num, page in enumerate(doc, start=1):
+            text = page.get_text("text").strip()
+            if not text:
+                pix = page.get_pixmap(dpi=300)
+                img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+                with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+                    tmp_path = tmp.name
+                    img.save(tmp_path)
+                try:
+                    text = ocr_service.extract_text(tmp_path)
+                finally:
+                    os.unlink(tmp_path)
+            if text:
+                pages_md.append(f"## Página {page_num}\n\n{text}")
+        doc.close()
+        return "\n\n---\n\n".join(pages_md)
+
+    @staticmethod
+    def _process_image(file_path: str, ocr_service: "OCRService") -> str:
+        return ocr_service.extract_text(file_path)
+
+    @staticmethod
+    def _process_docx(file_path: str) -> str:
+        doc = DocxDocument(file_path)
+        paragraphs: list[str] = []
+        for para in doc.paragraphs:
+            text = para.text.strip()
+            if not text:
+                continue
+            style_name = (para.style.name or "").lower()
+            if style_name.startswith("heading"):
+                try:
+                    level = int(style_name.replace("heading", "").strip())
+                except ValueError:
+                    level = 1
+                paragraphs.append(f"{'#' * level} {text}")
+            else:
+                paragraphs.append(text)
+        return "\n\n".join(paragraphs)
+
+    @staticmethod
+    def _process_text(file_path: str) -> str:
+        with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+            return f.read()
 
     @staticmethod
     @transaction.atomic

@@ -1,4 +1,4 @@
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db.models import Sum
@@ -108,7 +108,7 @@ class UploadLimitsTestCase(TestCase):
         )
         self.client.force_authenticate(user=self.user)
 
-    @patch("documents.views.process_document")
+    @patch("documents.views.DocumentService.process_document")
     def test_free_user_blocked_at_document_limit(self, mock_process):
         for i in range(5):
             Document.objects.create(
@@ -120,7 +120,7 @@ class UploadLimitsTestCase(TestCase):
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertIn("límite", response.data["error"])
 
-    @patch("documents.views.process_document")
+    @patch("documents.views.DocumentService.process_document")
     def test_free_user_blocked_at_storage_limit(self, mock_process):
         nine_dot_nine_mb = 9 * 1024 * 1024 + 900 * 1024
         Document.objects.create(
@@ -133,7 +133,7 @@ class UploadLimitsTestCase(TestCase):
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertIn("almacenamiento", response.data["error"])
 
-    @patch("documents.views.process_document")
+    @patch("documents.views.DocumentService.process_document")
     def test_pro_user_can_upload_beyond_free_limit(self, mock_process):
         self.user.subscription.plan = self.pro_plan
         self.user.subscription.save(update_fields=["plan", "updated_at"])
@@ -211,3 +211,58 @@ class OCRServiceRoutingTestCase(TestCase):
         user.subscription.delete()
         service = get_ocr_service(user)
         self.assertIsInstance(service, TesseractOCRService)
+
+
+class DocumentServiceProcessTestCase(TestCase):
+    """Tests para DocumentService.process_document con OCR inyectado."""
+
+    def setUp(self):
+        self.free_plan, _ = Plan.objects.get_or_create(
+            plan_type=Plan.PlanType.FREE,
+            defaults={
+                "name": "Free", "price": "0.00",
+                "description": "Plan gratuito", "max_documents": 5, "max_storage_mb": 10,
+            },
+        )
+        self.user = User.objects.create_user(
+            email="proc@test.com", username="procuser", password="TestPass123!"
+        )
+
+    def test_process_text_document_uses_no_ocr(self):
+        """Procesar un .txt no requiere llamar al servicio OCR."""
+        import os
+        import tempfile
+        with tempfile.NamedTemporaryFile(suffix=".txt", delete=False, mode="w", encoding="utf-8") as f:
+            f.write("Contenido de prueba")
+            tmp_path = f.name
+        try:
+            doc = Document.objects.create(
+                user=self.user,
+                file_name="test.txt",
+                file_type=Document.FileType.TEXT,
+                file_size=19,
+            )
+            # Patch file.path to return the temp file path directly,
+            # bypassing Django's FileSystemStorage MEDIA_ROOT boundary check.
+            with patch.object(type(doc.file), "path", new_callable=lambda: property(lambda self: tmp_path)):
+                mock_ocr = MagicMock(spec=TesseractOCRService)
+                DocumentService.process_document(doc, mock_ocr)
+            doc.refresh_from_db()
+            self.assertEqual(doc.status, Document.Status.COMPLETED)
+            self.assertIn("Contenido de prueba", doc.markdown_content)
+            mock_ocr.extract_text.assert_not_called()
+        finally:
+            os.unlink(tmp_path)
+
+    @patch("documents.views.get_ocr_service")
+    def test_upload_calls_get_ocr_service(self, mock_get_ocr):
+        """upload_document llama a get_ocr_service con el usuario autenticado."""
+        mock_ocr = MagicMock(spec=TesseractOCRService)
+        mock_ocr.extract_text.return_value = ""
+        mock_get_ocr.return_value = mock_ocr
+        client = APIClient()
+        client.force_authenticate(user=self.user)
+        file = SimpleUploadedFile("test.txt", b"hola", content_type="text/plain")
+        response = client.post("/api/documents/upload/", {"file": file}, format="multipart")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        mock_get_ocr.assert_called_once_with(self.user)
