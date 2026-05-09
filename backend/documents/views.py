@@ -46,6 +46,12 @@ def upload_document(request):
     ocr_service = get_ocr_service(request.user)
     DocumentService.process_document(document, ocr_service)
 
+    if document.status == Document.Status.FAILED:
+        return Response(
+            {"error": document.error_message},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
     return Response(
         {
             "id": str(document.id),
@@ -60,6 +66,7 @@ def upload_document(request):
 
 
 @api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def list_documents(request):
     """Lista todos los documentos del usuario autenticado."""
     documents = Document.objects.filter(user=request.user)
@@ -78,6 +85,7 @@ def list_documents(request):
 
 
 @api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def get_document(request, document_id):
     """Obtiene un documento específico con su contenido Markdown."""
     try:
@@ -103,6 +111,7 @@ def get_document(request, document_id):
 
 
 @api_view(["DELETE"])
+@permission_classes([IsAuthenticated])
 def delete_document(request, document_id):
     """Elimina un documento del usuario."""
     try:

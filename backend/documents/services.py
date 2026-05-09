@@ -96,23 +96,24 @@ class DocumentService:
 
     @staticmethod
     def _process_pdf(file_path: str, ocr_service: "OCRService") -> str:
-        doc = fitz.open(file_path)
         pages_md: list[str] = []
-        for page_num, page in enumerate(doc, start=1):
-            text = page.get_text("text").strip()
-            if not text:
-                pix = page.get_pixmap(dpi=300)
-                img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-                with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
-                    tmp_path = tmp.name
-                    img.save(tmp_path)
-                try:
-                    text = ocr_service.extract_text(tmp_path)
-                finally:
-                    os.unlink(tmp_path)
-            if text:
-                pages_md.append(f"## Página {page_num}\n\n{text}")
-        doc.close()
+        with fitz.open(file_path) as doc:
+            for page_num, page in enumerate(doc, start=1):
+                text = page.get_text("text").strip()
+                if not text:
+                    pix = page.get_pixmap(dpi=300)
+                    img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+                    tmp_path = None
+                    try:
+                        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+                            tmp_path = tmp.name
+                        img.save(tmp_path)
+                        text = ocr_service.extract_text(tmp_path)
+                    finally:
+                        if tmp_path:
+                            os.unlink(tmp_path)
+                if text:
+                    pages_md.append(f"## Página {page_num}\n\n{text}")
         return "\n\n---\n\n".join(pages_md)
 
     @staticmethod
