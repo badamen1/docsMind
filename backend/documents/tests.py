@@ -10,6 +10,7 @@ from users.models import User
 from documents.models import Document
 from subscription.models import Plan
 from documents.services import DocumentService
+from documents.ocr import get_ocr_service, TesseractOCRService, LandingAIOCRService
 
 
 class DocumentUploadTestCase(TestCase):
@@ -163,3 +164,50 @@ class UploadLimitsTestCase(TestCase):
         with self.assertRaises(PermissionError) as ctx:
             DocumentService.check_upload_limits(self.user, 1)
         self.assertIn("almacenamiento", str(ctx.exception))
+
+
+class OCRServiceRoutingTestCase(TestCase):
+    """Tests para el factory de OCR según el plan del usuario."""
+
+    def setUp(self):
+        self.free_plan, _ = Plan.objects.get_or_create(
+            plan_type=Plan.PlanType.FREE,
+            defaults={
+                "name": "Free", "price": "0.00",
+                "description": "Plan gratuito", "max_documents": 5, "max_storage_mb": 10,
+            },
+        )
+        self.pro_plan, _ = Plan.objects.get_or_create(
+            plan_type=Plan.PlanType.PRO,
+            defaults={
+                "name": "Pro", "price": "9.99",
+                "description": "Plan pro", "max_documents": 100, "max_storage_mb": 1024,
+            },
+        )
+
+    def test_free_user_gets_tesseract(self):
+        """Usuario Free obtiene TesseractOCRService."""
+        user = User.objects.create_user(
+            email="free@ocrtest.com", username="freeocrtest", password="TestPass123!"
+        )
+        service = get_ocr_service(user)
+        self.assertIsInstance(service, TesseractOCRService)
+
+    def test_pro_user_gets_landing_ai(self):
+        """Usuario Pro obtiene LandingAIOCRService."""
+        user = User.objects.create_user(
+            email="pro@ocrtest.com", username="proocrtest", password="TestPass123!"
+        )
+        user.subscription.plan = self.pro_plan
+        user.subscription.save(update_fields=["plan", "updated_at"])
+        service = get_ocr_service(user)
+        self.assertIsInstance(service, LandingAIOCRService)
+
+    def test_user_without_subscription_gets_tesseract(self):
+        """Usuario sin suscripción obtiene Tesseract (fallback seguro)."""
+        user = User.objects.create_user(
+            email="nosub@ocrtest.com", username="nosubocr", password="TestPass123!"
+        )
+        user.subscription.delete()
+        service = get_ocr_service(user)
+        self.assertIsInstance(service, TesseractOCRService)
