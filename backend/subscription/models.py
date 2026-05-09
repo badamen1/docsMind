@@ -82,6 +82,9 @@ class Subscription(models.Model):
         choices=Status.choices,
         default=Status.ACTIVE,
     )
+    stripe_customer_id = models.CharField(max_length=255, null=True, blank=True)
+    stripe_subscription_id = models.CharField(max_length=255, null=True, blank=True)
+    stripe_price_id = models.CharField(max_length=255, null=True, blank=True)
     started_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

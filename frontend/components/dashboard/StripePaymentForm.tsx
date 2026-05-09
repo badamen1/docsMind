@@ -71,7 +71,14 @@ function PaymentFormContent() {
           Información de Pago
         </label>
         <div className="p-4 border border-gray-200 rounded-lg bg-white">
-          <PaymentElement options={{ layout: 'tabs' }} />
+          <PaymentElement options={{
+            layout: {
+              type: 'accordion',
+              defaultCollapsed: false,
+              radios: 'never',
+              spacedAccordionItems: true,
+            }
+          }} />
         </div>
       </div>
 
