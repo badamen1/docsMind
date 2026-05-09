@@ -5,12 +5,13 @@ from django.conf import settings
 from .base import AIService
 
 
-def get_ai_service(provider: str | None = None) -> AIService:
+def get_ai_service(provider: str | None = None, model: str | None = None) -> AIService:
     """
     Retorna la instancia del servicio de IA.
 
     Args:
         provider: "openai" | "gemini". Si es None, usa settings.AI_PROVIDER.
+        model: Modelo específico a usar (solo aplica a Gemini). Si es None, usa el default.
     """
     provider = (provider or getattr(settings, "AI_PROVIDER", "gemini")).lower()
 
@@ -19,4 +20,4 @@ def get_ai_service(provider: str | None = None) -> AIService:
         return OpenAIService()
     #Default: Gemini
     from .gemini_service import GeminiService
-    return GeminiService()
+    return GeminiService(model=model)

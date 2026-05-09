@@ -103,8 +103,19 @@ class SendMessageView(APIView):
         serializer = SendMessageSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user_content = serializer.validated_data["content"]
-        # Obtener proveedor del request (opcional)  
+        # Obtener proveedor del request (opcional)
         provider = serializer.validated_data.get("provider", "gemini")
+        gemini_model = serializer.validated_data.get("gemini_model")
+
+        # Gate: only Pro users can select a specific model
+        if gemini_model:
+            plan = getattr(getattr(request.user, "subscription", None), "plan", None)
+            is_pro = plan is not None and plan.plan_type == "pro"
+            if not is_pro:
+                return Response(
+                    {"detail": "La selección de modelo solo está disponible en el Plan Pro."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
 
         # Verificar que el documento está procesado
         document = chat.document
@@ -126,7 +137,7 @@ class SendMessageView(APIView):
 
         # Llamar al servicio de IA con el proveedor seleccionado
         try:
-            ai_service = get_ai_service(provider)
+            ai_service = get_ai_service(provider, model=gemini_model)
             ai_response = ai_service.generate_response(
                 document_content=document.markdown_content,
                 conversation_history=history,

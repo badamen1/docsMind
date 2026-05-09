@@ -47,3 +47,9 @@ class SendMessageSerializer(serializers.Serializer):
         default="gemini",
         required=False,
     )
+    gemini_model = serializers.ChoiceField(
+        choices=["gemini-2.5-flash", "gemini-2.5-pro"],
+        required=False,
+        allow_null=True,
+        default=None,
+    )

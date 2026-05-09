@@ -8,10 +8,10 @@ logger = logging.getLogger(__name__)
 class GeminiService(AIService):
     """Implementación concreta del servicio de IA usando Google Gemini."""
 
-    def __init__(self):
+    def __init__(self, model: str | None = None):
         genai.configure(api_key=settings.GEMINI_API_KEY)
-        # Por defecto si no se pasa, usamos el flash
-        self.model = genai.GenerativeModel(getattr(settings, 'GEMINI_MODEL', 'gemini-2.5-flash'))
+        resolved_model = model or getattr(settings, 'GEMINI_MODEL', 'gemini-2.5-flash')
+        self.model = genai.GenerativeModel(resolved_model)
 
     def generate_response(
         self,

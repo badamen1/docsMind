@@ -1,7 +1,7 @@
 from django.test import TestCase
 from rest_framework.test import APIClient
 from rest_framework import status
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from users.models import User
 from documents.models import Document
@@ -184,3 +184,82 @@ class ChatAPITestCase(TestCase):
         self.assertEqual(response.data["role"], Message.Role.ASSISTANT)
         # Verificar que se guardaron ambos mensajes (user + assistant)
         self.assertEqual(self.chat.messages.count(), 2)
+
+
+class GeminiModelSelectionTestCase(TestCase):
+    """Tests para la selección de modelo Gemini según el plan."""
+
+    def setUp(self):
+        self.free_plan, _ = Plan.objects.get_or_create(
+            plan_type=Plan.PlanType.FREE,
+            defaults={
+                "name": "Free", "price": "0.00",
+                "description": "Plan gratuito", "max_documents": 5, "max_storage_mb": 10,
+            },
+        )
+        self.pro_plan, _ = Plan.objects.get_or_create(
+            plan_type=Plan.PlanType.PRO,
+            defaults={
+                "name": "Pro", "price": "9.99",
+                "description": "Plan pro", "max_documents": 100, "max_storage_mb": 1024,
+            },
+        )
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            email="geminitest@test.com", username="geminitest", password="pass"
+        )
+        self.client.force_authenticate(user=self.user)
+        self.document = Document.objects.create(
+            user=self.user,
+            file_name="test.txt",
+            file_type=Document.FileType.TEXT,
+            file_size=100,
+            status=Document.Status.COMPLETED,
+            markdown_content="Contenido de prueba.",
+        )
+        self.chat = Chat.objects.create(
+            user=self.user, document=self.document, title="Chat test"
+        )
+
+    def test_free_user_cannot_select_gemini_model(self):
+        """Usuario Free recibe 403 al especificar gemini_model."""
+        response = self.client.post(
+            f"/api/chats/{self.chat.id}/messages/",
+            {"content": "Pregunta", "gemini_model": "gemini-2.5-pro"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertIn("Plan Pro", response.data["detail"])
+
+    @patch("chats.views.get_ai_service")
+    def test_pro_user_can_select_gemini_model(self, mock_get_ai):
+        """Usuario Pro puede elegir gemini-2.5-pro y se pasa al factory."""
+        mock_service = MagicMock()
+        mock_service.generate_response.return_value = "Respuesta Pro"
+        mock_get_ai.return_value = mock_service
+
+        self.user.subscription.plan = self.pro_plan
+        self.user.subscription.save(update_fields=["plan", "updated_at"])
+
+        response = self.client.post(
+            f"/api/chats/{self.chat.id}/messages/",
+            {"content": "Pregunta", "gemini_model": "gemini-2.5-pro"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        mock_get_ai.assert_called_once_with("gemini", model="gemini-2.5-pro")
+
+    @patch("chats.views.get_ai_service")
+    def test_free_user_without_model_field_uses_default(self, mock_get_ai):
+        """Usuario Free sin gemini_model obtiene 200 con modelo por defecto."""
+        mock_service = MagicMock()
+        mock_service.generate_response.return_value = "Respuesta Flash"
+        mock_get_ai.return_value = mock_service
+
+        response = self.client.post(
+            f"/api/chats/{self.chat.id}/messages/",
+            {"content": "Pregunta"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        mock_get_ai.assert_called_once_with("gemini", model=None)
