@@ -6,6 +6,8 @@ Pro users   → LandingAIOCRService (landingai-ade; reads VISION_AGENT_API_KEY f
 
 from abc import ABC, abstractmethod
 
+from subscription.models import Plan
+
 
 class OCRService(ABC):
     """Interface for OCR services. Allows swapping Tesseract / Landing AI."""
@@ -42,10 +44,11 @@ class LandingAIOCRService(OCRService):
 
 def get_ocr_service(user) -> OCRService:
     """Returns the appropriate OCR service based on the user's plan."""
-    try:
-        plan_type = user.subscription.plan.plan_type
-    except Exception:
-        plan_type = "free"
-    if plan_type == "pro":
+    plan_type = getattr(
+        getattr(getattr(user, "subscription", None), "plan", None),
+        "plan_type",
+        "free",
+    )
+    if plan_type == Plan.PlanType.PRO:
         return LandingAIOCRService()
     return TesseractOCRService()
