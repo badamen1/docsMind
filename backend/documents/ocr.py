@@ -32,9 +32,8 @@ class LandingAIOCRService(OCRService):
     """OCR with Landing AI ADE — available to Pro users only."""
 
     def extract_text(self, file_path: str) -> str:
-        import os
         from landingai_ade import LandingAIADE
-        client = LandingAIADE(api_key=os.environ["VISION_AGENT_API_KEY"])
+        client = LandingAIADE()  # reads VISION_AGENT_API_KEY from env
         with open(file_path, "rb") as f:
             result = client.parse(document=f)
         return result.markdown or ""
