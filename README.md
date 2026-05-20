@@ -33,3 +33,13 @@ Para bajar el servidor correctamente desde tu terminal:
 ```bash
 docker compose down
 ```
+## Arquitectura 
+<img width="1621" height="971" alt="Arquitectura drawio" src="https://github.com/user-attachments/assets/7d4af970-dd69-413d-91f3-5a802c1d16a4" />
+
+## Diagrama de clase
+<img width="3751" height="1672" alt="Diagrama de clase Docsmind drawio" src="https://github.com/user-attachments/assets/6aec4b2e-4caa-4c79-8023-023c3fedd602" />
+
+Enlace
+https://drive.google.com/file/d/1hRbfSvhPr1GIO130XFI5Ce9BzLwtxlc-/view?usp=sharing
+
+
